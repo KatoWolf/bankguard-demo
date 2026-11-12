@@ -1,3 +1,4 @@
+import {createSimulator} from './simulator.js';
 import {casePacket} from './case-packet.js';
 import {errorCases} from './diagnostics.js';
 import {createImportController,hasLocalWork} from './import-controller.js';
@@ -5,10 +6,10 @@ import {decision,evaluate,csv,VERSION,pendingQueue,compareThresholds,workload,ca
 import {scenarios as storyScenarios} from './data.js';
 import {generateStress} from './stress.js';
 import {parseSession,serializeSession,appendSessionEntry,MAX_SESSION_BYTES} from './session.js';
-const imports=createImportController();
+const imports=createImportController(), simulator=createSimulator();
 let scenarios=storyScenarios,datasetLabel='16 сюжетных сценариев';
 const $=s=>document.querySelector(s),fmt=n=>new Intl.NumberFormat('ru-RU').format(n),money=n=>fmt(n)+' ₸',esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-let threshold=50,selected=scenarios[1].id,log=[],resolutions=new Map(),lastSim=null,commentDrafts=new Map();
+let threshold=50,selected=scenarios[1].id,log=[],resolutions=new Map(),commentDrafts=new Map();
 const status=t=>resolutions.get(t.id)?.action || (decision(t,threshold).review?'На проверку':'Низкий балл');
 function card(label,value,hint,accent=false){return `<div class="stat ${accent?'accent':''}"><span>${label}</span><strong>${value}</strong><span>${hint}</span></div>`;}
 function reasons(r){return r.reasons.length?r.reasons.map(x=>`<div class="reason"><span>${x.label}</span><b>+${x.points}</b></div>`).join(''):'<p>Ни одно демо-правило не сработало. Это не гарантия безопасности.</p>';}
@@ -37,7 +38,7 @@ function renderComparison(){
 function renderCapacity(){
  try{const c=capacityEvaluation(scenarios,threshold,Number($('#capacity').value));$('#capacity-result').innerHTML=`<div class="stats">${card('Проверят',c.handled,`из ${c.alerts} тревог`)}${card('Останутся в очереди',c.waiting,`${c.waitingFraud} fraud-меток`)}${card('Fraud ниже порога',c.belowThresholdFraud,'Не попали в очередь')}${card('Recall с лимитом',c.recallWithCapacity===null?'—':Math.round(c.recallWithCapacity*100)+'%','При идеальной проверке, только синтетика',true)}</div>`;}catch(e){$('#capacity-result').textContent=e.message;}
 }
-function resetState(){imports.invalidate();threshold=50;selected=scenarios[Math.min(1,scenarios.length-1)].id;log=[];resolutions.clear();commentDrafts.clear();$('#threshold').value=50;$('#review-minutes').value=5;$('#capacity').value=5;$('#form-error').textContent='';$('#search').value='';$('#filter').value='all';lastSim=null;$('#sim-form').reset();$('#sim-result').innerHTML='<h2>Прозрачное решение</h2><p>Запустите расчёт.</p>';render();}
+function resetState(){imports.invalidate();threshold=50;selected=scenarios[Math.min(1,scenarios.length-1)].id;log=[];resolutions.clear();commentDrafts.clear();$('#threshold').value=50;$('#review-minutes').value=5;$('#capacity').value=5;$('#form-error').textContent='';$('#search').value='';$('#filter').value='all';simulator.invalidate();$('#sim-form').reset();$('#sim-result').innerHTML='<h2>Прозрачное решение</h2><p>Запустите расчёт.</p>';render();}
 function loadDataset(count){scenarios=count===16?storyScenarios:generateStress(count,2026);datasetLabel=count===16?'16 сюжетных сценариев':`${count} стресс-операций · seed 2026`;$('#dataset-count').textContent=scenarios.length;$('#dataset-note').textContent=count===16?'16 авторских сценариев. Метки предназначены только для лаборатории.':'Искусственные пересекающиеся распределения с условной долей fraud 15%. Не банковские данные и не независимая оценка качества.';resetState();}
 $('#load-dataset').onclick=()=>{if(hasLocalWork(log,commentDrafts)&&!confirm('Сбросить решения и черновики? Решения можно сохранить в демо-сессию; черновики не экспортируются.'))return;loadDataset(Number($('#dataset').value));};
 $('#capacity').oninput=()=>{renderCapacity();renderComparison();};
@@ -45,8 +46,8 @@ function renderAudit(){$('#audit-list').innerHTML=log.length?log.map(e=>`<div cl
 function download(name,text,type){const url=URL.createObjectURL(new Blob([text],{type})),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
 document.querySelectorAll('.nav').forEach(b=>b.onclick=()=>{document.querySelectorAll('.view').forEach(v=>v.hidden=v.id!==b.dataset.view);document.querySelectorAll('.nav').forEach(n=>{n.classList.toggle('active',n===b);if(n===b)n.setAttribute('aria-current','page');else n.removeAttribute('aria-current');});$('#page-label').textContent=b.textContent.slice(2);$('#'+b.dataset.view+' h1').focus();});
 $('#review-minutes').oninput=renderComparison;$('#export-report').onclick=()=>download('bankguard-experiment.json',JSON.stringify({synthetic:true,version:VERSION,createdAt:new Date().toISOString(),dataset:datasetLabel,sampleSize:scenarios.length,errorCases:errorCases(scenarios,threshold),comparison:compareThresholds(scenarios,threshold),workload:workload(scenarios,threshold,Number($('#review-minutes').value)),capacity:capacityEvaluation(scenarios,threshold,Number($('#capacity').value)),assumptions:{perfectAnalyst:true,capacityScope:'entire dataset, no arrival times or SLA',queueOrder:'risk descending, transaction ID ascending',seed:scenarios.length===16?null:2026},warning:'Synthetic fixture, not bank validation. Risk score is not a probability. Capacity recall assumes perfect identification of fraud among reviewed cases; it is not measured analyst performance.'},null,2),'application/json');
-$('#search').oninput=render;$('#filter').onchange=render;$('#threshold').oninput=e=>{threshold=Number(e.target.value);render();if(lastSim)$('#sim-result').innerHTML=resultHtml(lastSim);};
-$('#sim-form').onsubmit=e=>{e.preventDefault();const data=new FormData(e.target),t={};for(const k of ['amount','usualAmount','transfersHour'])t[k]=Number(data.get(k));for(const k of ['newRecipient','newDevice','callerPressure'])t[k]=data.has(k);try{$('#sim-result').innerHTML=resultHtml(t);lastSim=t;$('#form-error').textContent='';}catch(err){$('#form-error').textContent=err.message;}};
+$('#search').oninput=render;$('#filter').onchange=render;$('#threshold').oninput=e=>{threshold=Number(e.target.value);render();if(simulator.current())$('#sim-result').innerHTML=resultHtml(simulator.current());};
+$('#sim-form').onsubmit=e=>{e.preventDefault();const data=new FormData(e.target),t={};for(const k of ['amount','usualAmount','transfersHour'])t[k]=Number(data.get(k));for(const k of ['newRecipient','newDevice','callerPressure'])t[k]=data.has(k);try{simulator.calculate(t,threshold);$('#sim-result').innerHTML=resultHtml(simulator.current());$('#form-error').textContent='';}catch(err){$('#sim-result').textContent='Расчёт не выполнен. Исправьте входные данные.';$('#form-error').textContent=err.message;}};
 $('#export').onclick=()=>download('bankguard-transactions.csv',csv(scenarios.map(t=>({id:t.id,amount:t.amount,risk:decision(t,threshold).score,status:status(t),reason:decision(t,threshold).reasons.map(r=>r.label).join('; ')}))),'text/csv;charset=utf-8');
 $('#export-audit').onclick=()=>download('bankguard-audit.json',JSON.stringify({synthetic:true,version:VERSION,exportedAt:new Date().toISOString(),entries:log},null,2),'application/json');
 $('#reset').onclick=()=>{if(!hasLocalWork(log,commentDrafts)||confirm('Сбросить решения, черновики и настройки этой вкладки?'))resetState();};
@@ -71,3 +72,5 @@ $('#restore-session').onchange=async e=>{
  }catch(err){$('#session-note').textContent='Не удалось восстановить: '+err.message;}
 };
 render();
+
+$('#sim-form').oninput=()=>{simulator.invalidate();$('#sim-result').textContent='Данные изменены. Рассчитайте риск заново.';$('#form-error').textContent='';};

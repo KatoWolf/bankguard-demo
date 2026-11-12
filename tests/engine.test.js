@@ -12,3 +12,11 @@ test('empty metrics do not divide by zero',()=>{const m=evaluate([],50);assert.e
 test('increasing threshold cannot increase reviews',()=>{let prev=Infinity;for(let i=1;i<=100;i++){const n=evaluate(scenarios,i).reviewed;assert.ok(n<=prev);prev=n;}});
 test('no data mutation',()=>{const before=JSON.stringify(scenarios);evaluate(scenarios,50);assert.equal(JSON.stringify(scenarios),before);});
 test('CSV handles quoting and spreadsheet formulas',()=>{const out=csv([{id:'=SUM(A1)',reason:'hello,"world"\nnew'}]);assert.ok(out.includes("\"'=SUM(A1)\""));assert.ok(out.includes('"hello,""world""\nnew"'));});
+
+import {pendingQueue,compareThresholds,workload} from '../src/engine.js';
+test('queue is risk ordered, unresolved only and does not mutate fixture',()=>{const before=JSON.stringify(scenarios);const q=pendingQueue(scenarios,50,new Set(['TX-0002']));assert.equal(q.length,5);assert.equal(q[0].id,'TX-0003');assert.ok(q.every(r=>r.id!=='TX-0002'));assert.equal(JSON.stringify(scenarios),before);});
+test('empty pending queue after all reviews handled',()=>assert.equal(pendingQueue(scenarios,50,new Set(scenarios.map(t=>t.id))).length,0));
+test('queue uses current threshold without changing decisions',()=>{const ids=new Set(['TX-0002']);assert.equal(pendingQueue(scenarios,100,ids).length,0);assert.equal(ids.size,1);});
+test('baseline comparison is zero at baseline',()=>assert.deepEqual(compareThresholds(scenarios,50).delta,{reviews:0,falseAlerts:0,misses:0}));
+test('threshold 1 exposes workload versus recall tradeoff',()=>assert.deepEqual(compareThresholds(scenarios,1).delta,{reviews:7,falseAlerts:5,misses:-2}));
+test('workload is an explicit assumption',()=>{assert.equal(workload(scenarios,50).minutes,30);assert.equal(workload(scenarios,1,10).minutes,130);for(const n of [0,-1,NaN,Infinity,121])assert.throws(()=>workload(scenarios,50,n));});

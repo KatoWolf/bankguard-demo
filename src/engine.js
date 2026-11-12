@@ -31,3 +31,18 @@ export function csv(rows) {
   const escape=v=>'"'+String(v??'').replace(/^[=+@\-]/,"'$&").replaceAll('"','""')+'"';
   return '\uFEFF'+[cols,...rows.map(r=>cols.map(c=>r[c]))].map(r=>r.map(escape).join(',')).join('\r\n');
 }
+
+// Resolutions are analyst workflow state, never synthetic ground truth.
+export function pendingQueue(rows, threshold, resolvedIds = new Set()) {
+  return rows.filter(t => decision(t, threshold).review && !resolvedIds.has(t.id))
+    .sort((a,b) => score(b).score-score(a).score || a.id.localeCompare(b.id));
+}
+export function compareThresholds(rows, threshold, baseline=DEFAULT_THRESHOLD) {
+  const current=evaluate(rows,threshold), reference=evaluate(rows,baseline);
+  return {threshold,baseline,current,reference,delta:{reviews:current.reviewed-reference.reviewed,falseAlerts:current.fp-reference.fp,misses:current.fn-reference.fn}};
+}
+export function workload(rows, threshold, minutesPerReview=5) {
+  if (!Number.isFinite(minutesPerReview)||minutesPerReview<=0||minutesPerReview>120) throw new Error('Время проверки: больше 0 и не более 120 минут');
+  const metrics=evaluate(rows,threshold);
+  return {reviews:metrics.reviewed,minutes:metrics.reviewed*minutesPerReview,minutesPerReview};
+}

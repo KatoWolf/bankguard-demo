@@ -23,3 +23,11 @@ test('session normalizes comments and restores repeated decisions newest first',
  const resolutions=new Map([...entries].reverse().map(e=>[e.id,e]));
  assert.equal(resolutions.get('TX-0002').action,'Эскалировано');
 });
+
+test('UTF-8 BOM from Windows editors is accepted',()=>{
+ assert.deepEqual(parseSession('\uFEFF'+serializeSession(state)),parseSession(serializeSession(state)));
+});
+test('byte size limit applies to Unicode input rather than JS character count',()=>{
+ const text=JSON.stringify({...state,note:'я'.repeat(1_000_000)});
+ assert.throws(()=>parseSession(text),/слишком большой/);
+});

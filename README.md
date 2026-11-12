@@ -4,7 +4,7 @@
 
 ## Запуск за минуту
 
-Нужен Node.js 20+; сторонних зависимостей нет.
+Нужен Node.js 20+; сторонних зависимостей нет. Установка `npm install` не требуется. Для Windows: [пошаговый запуск](docs/windows_ru.md).
 
 ```sh
 git clone https://github.com/KatoWolf/bankguard-demo.git
@@ -14,7 +14,7 @@ npm start
 ```
 
 ```sh
-npm test       # 18 тестов правил, границ, метрик и CSV
+npm test       # 42 теста правил, импорта, экспорта и воспроизводимости
 npm run build  # статические файлы в dist/
 ```
 

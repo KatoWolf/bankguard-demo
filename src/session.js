@@ -5,7 +5,8 @@ export const MAX_SESSION_BYTES=2_000_000;
 // Only built-in synthetic data can be restored. Scores/reasons are recomputed.
 export function parseSession(text){
  if(typeof text!=='string'||new TextEncoder().encode(text).length>MAX_SESSION_BYTES)throw new Error('Файл сессии слишком большой (лимит 2 МБ)');
- const s=JSON.parse(text);
+ // UTF-8 BOM is common in files saved by Windows editors.
+ const s=JSON.parse(text.replace(/^\uFEFF/,''));
  if(!s||s.schema!=='bankguard-session-1'||s.synthetic!==true||s.version!==VERSION)throw new Error('Несовместимый формат демо-сессии');
  if(![16,200,1000].includes(s.datasetSize))throw new Error('Неизвестный набор данных');
  const rows=s.datasetSize===16?scenarios:generateStress(s.datasetSize,2026),byId=new Map(rows.map(t=>[t.id,t]));

@@ -31,3 +31,49 @@ test('byte size limit applies to Unicode input rather than JS character count',(
  const text=JSON.stringify({...state,note:'я'.repeat(1_000_000)});
  assert.throws(()=>parseSession(text),/слишком большой/);
 });
+
+import {appendSessionEntry,MAX_SESSION_BYTES} from '../src/session.js';
+test('3000 imported decisions re-export without derived-field inflation',()=>{
+ const s={...state,entries:Array.from({length:3000},()=>({...state.entries[0],note:'a'.repeat(240),time:'2026-11-12T00:00:00Z'}))};
+ const restored=parseSession(JSON.stringify({schema:'bankguard-session-1',synthetic:true,version:'rules-1.0',...s}));
+ assert.ok(restored.entries[0].reasons.length);
+ const text=serializeSession(restored);assert.ok(new TextEncoder().encode(text).length<=MAX_SESSION_BYTES);
+ assert.equal(JSON.parse(text).entries[0].reasons,undefined);assert.equal(JSON.parse(text).entries[0].risk,undefined);
+ assert.deepEqual(parseSession(text),restored);
+});
+test('full journal remains exportable when next decision is rejected',()=>{
+ const full={...state,entries:Array.from({length:5000},()=>({...state.entries[0]}))};
+ const before=serializeSession(full);
+ assert.throws(()=>appendSessionEntry(full,state.entries[0]),/5000/);
+ assert.equal(full.entries.length,5000);assert.equal(serializeSession(full),before);
+});
+test('new decision is rejected before exceeding UTF-8 byte capacity',()=>{
+ const entry={...state.entries[0],note:'я'.repeat(240)};
+ const base={...state,entries:[]};
+ // Build a valid near-limit session with fewer than 5000 entries.
+ const header=serializeSession(base).length;
+ const bytes=new TextEncoder().encode(JSON.stringify(entry)).length+1;
+ const count=Math.floor((MAX_SESSION_BYTES-header)/bytes);
+ base.entries=Array.from({length:count},()=>({...entry}));
+ const before=serializeSession(base);
+ assert.throws(()=>appendSessionEntry(base,entry),/слишком большой/);
+ assert.equal(serializeSession(base),before);
+});
+test('canonical session export is stable through repeated normalization',()=>{
+ const s={...state,entries:[{...state.entries[0],note:'  Проверено  ',time:'2026-11-12'}]};
+ const first=serializeSession(s);assert.equal(serializeSession(parseSession(first)),first);
+});
+
+test('normalization cannot accept a near-limit import that becomes too large to save',()=>{
+ const header={schema:'bankguard-session-1',synthetic:true,version:'rules-1.0',...state,entries:[]};
+ const e={...state.entries[0],note:'я'.repeat(240),time:'2026'};
+ const overhead=new TextEncoder().encode(JSON.stringify(header)).length;
+ const perEntry=new TextEncoder().encode(JSON.stringify(e)).length+1;
+ header.entries=Array.from({length:Math.floor((MAX_SESSION_BYTES-overhead)/perEntry)},()=>({...e}));
+ const raw=JSON.stringify(header);assert.ok(new TextEncoder().encode(raw).length<=MAX_SESSION_BYTES);
+ assert.throws(()=>parseSession(raw),/слишком большой/);
+});
+test('journal limit checks are independent of temporarily invalid workload inputs',()=>{
+ const result=appendSessionEntry({...state,minutesPerReview:0,capacity:NaN},state.entries[0]);
+ assert.equal(result.entries.length,2);assert.equal(state.entries.length,1);
+});

@@ -20,3 +20,12 @@ test('queue uses current threshold without changing decisions',()=>{const ids=ne
 test('baseline comparison is zero at baseline',()=>assert.deepEqual(compareThresholds(scenarios,50).delta,{reviews:0,falseAlerts:0,misses:0}));
 test('threshold 1 exposes workload versus recall tradeoff',()=>assert.deepEqual(compareThresholds(scenarios,1).delta,{reviews:7,falseAlerts:5,misses:-2}));
 test('workload is an explicit assumption',()=>{assert.equal(workload(scenarios,50).minutes,30);assert.equal(workload(scenarios,1,10).minutes,130);for(const n of [0,-1,NaN,Infinity,121])assert.throws(()=>workload(scenarios,50,n));});
+
+import {generateStress} from '../src/stress.js';
+import {capacityEvaluation} from '../src/engine.js';
+test('stress generation is deterministic and seed dependent',()=>{assert.deepEqual(generateStress(20,1),generateStress(20,1));assert.notDeepEqual(generateStress(20,1),generateStress(20,2));});
+test('stress fixture validates, has unique IDs, both labels and no score leakage',()=>{const rows=generateStress(1000);assert.equal(new Set(rows.map(t=>t.id)).size,1000);assert.ok(rows.some(t=>t.fraud)&&rows.some(t=>!t.fraud));rows.forEach(t=>assert.equal(score(t).score,score({...t,fraud:!t.fraud}).score));});
+test('generator rejects bad bounds',()=>{for(const c of [0,-1,5001,NaN,1.5])assert.throws(()=>generateStress(c));assert.throws(()=>generateStress(5,-1));});
+test('capacity separates below-threshold misses from waiting',()=>{const r=capacityEvaluation(scenarios,50,0);assert.equal(r.handled,0);assert.equal(r.waiting,6);assert.equal(r.waitingFraud,5);assert.equal(r.belowThresholdFraud,2);assert.equal(r.recallWithCapacity,0);});
+test('unlimited capacity reaches threshold recall',()=>assert.equal(capacityEvaluation(scenarios,50,100).recallWithCapacity,evaluate(scenarios,50).recall));
+test('capacity refuses invalid inputs',()=>{for(const c of [-1,NaN,1.5])assert.throws(()=>capacityEvaluation(scenarios,50,c));});

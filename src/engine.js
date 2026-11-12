@@ -46,3 +46,11 @@ export function workload(rows, threshold, minutesPerReview=5) {
   const metrics=evaluate(rows,threshold);
   return {reviews:metrics.reviewed,minutes:metrics.reviewed*minutesPerReview,minutesPerReview};
 }
+
+export function capacityEvaluation(rows,threshold,capacity){
+ if(!Number.isInteger(capacity)||capacity<0)throw new Error('Ёмкость должна быть неотрицательным целым числом');
+ evaluate(rows,threshold);
+ const alerts=pendingQueue(rows,threshold),handled=alerts.slice(0,capacity),waiting=alerts.slice(capacity);
+ const totalFraud=rows.filter(t=>t.fraud).length,found=handled.filter(t=>t.fraud).length;
+ return {capacity,alerts:alerts.length,handled:handled.length,waiting:waiting.length,found,waitingFraud:waiting.filter(t=>t.fraud).length,belowThresholdFraud:rows.filter(t=>t.fraud&&!decision(t,threshold).review).length,recallWithCapacity:totalFraud?found/totalFraud:null};
+}

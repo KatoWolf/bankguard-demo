@@ -1,5 +1,8 @@
 export const VERSION = 'rules-1.0';
 export const DEFAULT_THRESHOLD = 50;
+function validateThreshold(threshold) {
+  if(!Number.isInteger(threshold)||threshold<1||threshold>100)throw new Error('Порог: целое число 1–100');
+}
 export function validate(t) {
   for (const k of ['amount','usualAmount','transfersHour']) if (!Number.isFinite(t[k]) || t[k] < 0) throw new Error(`Некорректное поле: ${k}`);
   if (t.amount <= 0 || t.usualAmount <= 0 || t.amount>1e10 || t.usualAmount>1e10) throw new Error('Сумма должна быть больше нуля и не более 10 млрд');
@@ -18,10 +21,11 @@ export function score(t) {
   return {score:Math.min(100,reasons.reduce((s,r)=>s+r.points,0)),reasons,version:VERSION};
 }
 export function decision(t,threshold=DEFAULT_THRESHOLD) {
-  if(!Number.isInteger(threshold)||threshold<1||threshold>100)throw new Error('Порог: целое число 1–100');
+  validateThreshold(threshold);
   const result=score(t); return {...result,review:result.score>=threshold};
 }
-export function evaluate(rows,threshold) {
+export function evaluate(rows,threshold=DEFAULT_THRESHOLD) {
+  validateThreshold(threshold);
   const m={tp:0,fp:0,tn:0,fn:0,reviewed:0,total:rows.length};
   for(const t of rows){if(typeof t.fraud!=='boolean')throw new Error('Отсутствует синтетическая метка');const p=decision(t,threshold).review;m[p?(t.fraud?'tp':'fp'):(t.fraud?'fn':'tn')]++;if(p)m.reviewed++;}
   m.precision=m.tp+m.fp?m.tp/(m.tp+m.fp):null;m.recall=m.tp+m.fn?m.tp/(m.tp+m.fn):null;return m;
@@ -33,7 +37,8 @@ export function csv(rows) {
 }
 
 // Resolutions are analyst workflow state, never synthetic ground truth.
-export function pendingQueue(rows, threshold, resolvedIds = new Set()) {
+export function pendingQueue(rows, threshold=DEFAULT_THRESHOLD, resolvedIds = new Set()) {
+  validateThreshold(threshold);
   return rows.filter(t => decision(t, threshold).review && !resolvedIds.has(t.id))
     .sort((a,b) => score(b).score-score(a).score || a.id.localeCompare(b.id));
 }
@@ -48,7 +53,7 @@ export function workload(rows, threshold, minutesPerReview=5) {
 }
 
 export function capacityEvaluation(rows,threshold,capacity){
- if(!Number.isInteger(capacity)||capacity<0)throw new Error('Ёмкость должна быть неотрицательным целым числом');
+ if(!Number.isInteger(capacity)||capacity<0||capacity>5000)throw new Error('Ёмкость: целое число от 0 до 5000');
  evaluate(rows,threshold);
  const alerts=pendingQueue(rows,threshold),handled=alerts.slice(0,capacity),waiting=alerts.slice(capacity);
  const totalFraud=rows.filter(t=>t.fraud).length,found=handled.filter(t=>t.fraud).length;

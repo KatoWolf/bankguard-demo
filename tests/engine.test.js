@@ -43,3 +43,34 @@ test('stress capacity accounting reconciles at every threshold',()=>{
   assert.equal(c.found+c.waitingFraud+c.belowThresholdFraud,m.tp+m.fn);
  }
 });
+
+test('all 32 rule combinations match independently computed scores and boundaries',()=>{
+ const weights=[25,15,20,20,35];
+ for(let mask=0;mask<32;mask++){
+  const flags=weights.map((_,i)=>Boolean(mask&(1<<i)));
+  const row={...t,amount:flags[0]?125000:25000,newRecipient:flags[1],newDevice:flags[2],transfersHour:flags[3]?5:1,callerPressure:flags[4]};
+  const expected=Math.min(100,weights.reduce((n,w,i)=>n+(flags[i]?w:0),0));
+  assert.equal(score(row).score,expected);assert.equal(score(row).reasons.length,flags.filter(Boolean).length);
+  for(const threshold of [1,25,50,75,100])assert.equal(decision(row,threshold).review,expected>=threshold);
+ }
+});
+test('authored scenario scores and labels stay stable',()=>{
+ assert.deepEqual(scenarios.map(row=>score(row).score),[0,75,60,40,55,20,0,50,40,15,20,35,60,35,55,0]);
+ assert.deepEqual(scenarios.filter(row=>row.fraud).map(row=>row.id),['TX-0002','TX-0003','TX-0005','TX-0008','TX-0010','TX-0012','TX-0015']);
+});
+test('empty collections cannot bypass invalid threshold checks',()=>{
+ for(const threshold of [0,101,null,NaN,'50',1.5]){
+  assert.throws(()=>evaluate([],threshold));assert.throws(()=>pendingQueue([],threshold));
+  assert.throws(()=>workload([],threshold));assert.throws(()=>capacityEvaluation([],threshold,0));
+  assert.throws(()=>compareThresholds([],threshold));assert.throws(()=>compareThresholds([],50,threshold));
+ }
+ assert.equal(evaluate([]).total,0);assert.deepEqual(pendingQueue([]),[]);
+});
+test('capacity bounds agree with session and UI limits',()=>{
+ assert.throws(()=>capacityEvaluation(scenarios,50,5001));
+ assert.equal(capacityEvaluation(scenarios,50,5000).handled,6);
+});
+test('capacity recall is undefined when the dataset has no fraud',()=>{
+ const result=capacityEvaluation(scenarios.filter(row=>!row.fraud),50,5);
+ assert.equal(result.recallWithCapacity,null);assert.equal(result.found,0);
+});

@@ -7,7 +7,7 @@ import {fileURLToPath, pathToFileURL} from 'node:url';
 export const PUBLIC_FILES = Object.freeze([
   'index.html', 'style.css', 'src/app.js', 'src/case-packet.js',
   'src/data.js', 'src/diagnostics.js', 'src/engine.js',
-  'src/import-controller.js', 'src/simulator.js', 'src/session.js', 'src/stress.js', 'src/threshold-sweep.js'
+  'src/import-controller.js', 'src/simulator.js', 'src/session.js', 'src/stress.js', 'src/threshold-sweep.js', 'src/numeric-input.js'
 ]);
 const allowed = new Set(PUBLIC_FILES);
 const projectRoot = path.dirname(fileURLToPath(import.meta.url));

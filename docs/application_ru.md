@@ -22,7 +22,7 @@ https://github.com/KatoWolf/bankguard-demo
 
 Файл презентации в репозитории: [`docs/bankguard-presentation-ru.pdf`](bankguard-presentation-ru.pdf).
 
-Ссылка для заявки после загрузки PDF: https://github.com/KatoWolf/bankguard-demo/blob/main/docs/bankguard-presentation-ru.pdf
+Презентация для заявки (актуальный PDF, 8 слайдов): https://github.com/KatoWolf/bankguard-demo/blob/main/docs/bankguard-presentation-ru.pdf
 
 Перед отправкой проверьте, что PDF загружен и открывается без приглашения.
 

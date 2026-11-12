@@ -1,0 +1,14 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {score,decision,evaluate,csv} from '../src/engine.js';import {scenarios} from '../src/data.js';
+const t={amount:25000,usualAmount:25000,transfersHour:1,newRecipient:false,newDevice:false,callerPressure:false};
+test('ordinary transaction has zero risk',()=>assert.equal(score(t).score,0));
+test('exact amount boundary',()=>{assert.equal(score({...t,amount:124999}).score,0);assert.equal(score({...t,amount:125000}).score,25);});
+test('each rule contributes independently',()=>{for(const [key,value,points]of [['newRecipient',true,15],['newDevice',true,20],['callerPressure',true,35],['transfersHour',5,20]])assert.equal(score({...t,[key]:value}).score,points);});
+test('risk cap is 100, reason points preserved',()=>{const r=score({...t,amount:200000,newRecipient:true,newDevice:true,callerPressure:true,transfersHour:8});assert.equal(r.score,100);assert.equal(r.reasons.reduce((a,b)=>a+b.points,0),115);});
+test('inclusive review threshold',()=>{assert.equal(decision({...t,newRecipient:true,callerPressure:true},50).review,true);assert.equal(decision({...t,newRecipient:true,callerPressure:true},51).review,false);});
+test('invalid transaction values rejected',()=>{for(const patch of [{amount:NaN},{amount:-1},{amount:Infinity},{usualAmount:0},{transfersHour:1.2},{newDevice:'false'},{callerPressure:undefined},{amount:1e11}])assert.throws(()=>score({...t,...patch}));});
+test('invalid thresholds rejected',()=>{for(const v of [0,101,NaN,'50',1.5])assert.throws(()=>decision(t,v));});
+test('default synthetic matrix is reproducible and includes misses/false alerts',()=>{const m=evaluate(scenarios,50);assert.equal(m.total,16);assert.equal(m.tp,5);assert.equal(m.fp,1);assert.equal(m.fn,2);assert.equal(m.tn,8);assert.equal(m.reviewed,6);});
+test('empty metrics do not divide by zero',()=>{const m=evaluate([],50);assert.equal(m.precision,null);assert.equal(m.recall,null);});
+test('increasing threshold cannot increase reviews',()=>{let prev=Infinity;for(let i=1;i<=100;i++){const n=evaluate(scenarios,i).reviewed;assert.ok(n<=prev);prev=n;}});
+test('no data mutation',()=>{const before=JSON.stringify(scenarios);evaluate(scenarios,50);assert.equal(JSON.stringify(scenarios),before);});
+test('CSV handles quoting and spreadsheet formulas',()=>{const out=csv([{id:'=SUM(A1)',reason:'hello,"world"\nnew'}]);assert.ok(out.includes("\"'=SUM(A1)\""));assert.ok(out.includes('"hello,""world""\nnew"'));});

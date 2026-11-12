@@ -28,7 +28,7 @@ export function evaluate(rows,threshold) {
 }
 export function csv(rows) {
   const cols=['id','amount','risk','status','reason'];
-  const escape=v=>'"'+String(v??'').replace(/^[=+@\-]/,"'$&").replaceAll('"','""')+'"';
+  const escape=v=>'"'+String(v??'').replace(/^[\s]*[=+@\-]|^[\t\r\n]/,"'$&").replaceAll('"','""')+'"';
   return '\uFEFF'+[cols,...rows.map(r=>cols.map(c=>r[c]))].map(r=>r.map(escape).join(',')).join('\r\n');
 }
 

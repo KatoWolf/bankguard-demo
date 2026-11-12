@@ -1,0 +1,28 @@
+name: Test and build
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    strategy:
+      matrix:
+        node: [20, 22, 24]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      # No install step: this project has no third-party runtime/test packages.
+      - run: npm test
+      - run: npm run build
+      - name: Verify static assets
+        run: |
+          test -s dist/index.html
+          test -s dist/style.css
+          for file in src/*.js; do cmp "$file" "dist/$file"; done

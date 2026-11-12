@@ -29,3 +29,17 @@ test('generator rejects bad bounds',()=>{for(const c of [0,-1,5001,NaN,1.5])asse
 test('capacity separates below-threshold misses from waiting',()=>{const r=capacityEvaluation(scenarios,50,0);assert.equal(r.handled,0);assert.equal(r.waiting,6);assert.equal(r.waitingFraud,5);assert.equal(r.belowThresholdFraud,2);assert.equal(r.recallWithCapacity,0);});
 test('unlimited capacity reaches threshold recall',()=>assert.equal(capacityEvaluation(scenarios,50,100).recallWithCapacity,evaluate(scenarios,50).recall));
 test('capacity refuses invalid inputs',()=>{for(const c of [-1,NaN,1.5])assert.throws(()=>capacityEvaluation(scenarios,50,c));});
+
+test('CSV neutralizes formula prefixes hidden by whitespace or control characters',()=>{
+ for(const value of ['=1+1','+1','-1','@SUM(A1)',' =1','\t=1','\r=1','\n=1']) {
+  assert.ok(csv([{id:value}]).includes('"\''+value+'"'));
+ }
+});
+test('stress capacity accounting reconciles at every threshold',()=>{
+ const rows=generateStress(1000);
+ for(const threshold of [1,25,50,75,100])for(const capacity of [0,5,100,1000]){
+  const c=capacityEvaluation(rows,threshold,capacity), m=evaluate(rows,threshold);
+  assert.equal(c.handled+c.waiting,c.alerts);assert.equal(c.alerts,m.reviewed);
+  assert.equal(c.found+c.waitingFraud+c.belowThresholdFraud,m.tp+m.fn);
+ }
+});
